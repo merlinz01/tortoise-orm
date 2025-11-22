@@ -464,9 +464,13 @@ class BaseSchemaGenerator:
         models_to_create: list[type[Model]] = []
         for app in Tortoise.apps.values():
             for model in app.values():
+                # Skip views - they are created separately
+                if type(model._meta).__name__ == "ViewMetaInfo":
+                    continue
+                # At this point, model is guaranteed to be type[Model]
                 if model._meta.db == self.client:
-                    model._check()
-                    models_to_create.append(model)
+                    model._check()  # type: ignore[union-attr]
+                    models_to_create.append(model)  # type: ignore[arg-type]
         return models_to_create
 
     def get_create_schema_sql(self, safe: bool = True) -> str:

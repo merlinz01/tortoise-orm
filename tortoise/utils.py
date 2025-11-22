@@ -45,6 +45,24 @@ async def generate_schema_for_client(client: BaseDBAsyncClient, safe: bool) -> N
     if schema:  # pragma: nobranch
         await generator.generate_from_string(schema)
 
+    # Also generate views after tables are created
+    view_generator = client.view_generator(client)
+    view_schema = get_view_schema_sql(client, safe)
+    logger.debug("Creating views: %s", view_schema)
+    if view_schema:
+        await view_generator.generate_from_string(view_schema)
+
+
+def get_view_schema_sql(client: BaseDBAsyncClient, safe: bool) -> str:
+    """
+    Generates the SQL view schema for the given client.
+
+    :param client: The DB client to generate View Schema SQL for
+    :param safe: When set to true, creates the view only when it does not already exist.
+    """
+    generator = client.view_generator(client)
+    return generator.get_create_schema_sql(safe)
+
 
 def chunk(instances: Iterable[Any], batch_size: int | None = None) -> Iterable[Iterable[Any]]:
     """

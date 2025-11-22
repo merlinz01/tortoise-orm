@@ -9,6 +9,7 @@ from pypika_tortoise import Query
 
 from tortoise.backends.base.executor import BaseExecutor
 from tortoise.backends.base.schema_generator import BaseSchemaGenerator
+from tortoise.backends.base.view_generator import BaseViewSchemaGenerator
 from tortoise.connection import connections
 from tortoise.exceptions import TransactionManagementError
 from tortoise.log import db_client_logger
@@ -105,6 +106,11 @@ class BaseDBAsyncClient(abc.ABC):
 
         The DDL schema generator
 
+    .. attribute:: view_generator
+        :annotation: type[BaseViewSchemaGenerator]
+
+        The view schema generator
+
     .. attribute:: capabilities
         :annotation: Capabilities
 
@@ -118,6 +124,7 @@ class BaseDBAsyncClient(abc.ABC):
     query_class: type[Query] = Query
     executor_class: type[BaseExecutor] = BaseExecutor
     schema_generator: type[BaseSchemaGenerator] = BaseSchemaGenerator
+    view_generator: type[BaseViewSchemaGenerator] = BaseViewSchemaGenerator
     capabilities: Capabilities = Capabilities("")
 
     def __init__(self, connection_name: str, fetch_inserted: bool = True, **kwargs: Any) -> None:

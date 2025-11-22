@@ -22,6 +22,7 @@ from tortoise.backends.base.client import (
 )
 from tortoise.backends.sqlite.executor import SqliteExecutor
 from tortoise.backends.sqlite.schema_generator import SqliteSchemaGenerator
+from tortoise.backends.sqlite.view_generator import SQLiteViewSchemaGenerator
 from tortoise.connection import connections
 from tortoise.contrib.sqlite.regex import (
     install_regexp_functions as install_regexp_functions_to_db,
@@ -53,6 +54,7 @@ class SqliteClient(BaseDBAsyncClient):
     executor_class = SqliteExecutor
     query_class = SQLLiteQuery
     schema_generator = SqliteSchemaGenerator
+    view_generator = SQLiteViewSchemaGenerator
     capabilities = Capabilities(
         "sqlite",
         daemon=False,

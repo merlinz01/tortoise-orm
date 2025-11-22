@@ -20,6 +20,7 @@ from tortoise.backends.base_postgres.client import (
     BasePostgresClient,
     translate_exceptions,
 )
+from tortoise.backends.base_postgres.view_generator import PostgreSQLViewSchemaGenerator
 from tortoise.exceptions import (
     DBConnectionError,
     IntegrityError,
@@ -34,6 +35,7 @@ F = TypeVar("F", bound=FuncType)
 class AsyncpgDBClient(BasePostgresClient):
     executor_class = AsyncpgExecutor
     schema_generator = AsyncpgSchemaGenerator
+    view_generator = PostgreSQLViewSchemaGenerator
     connection_class = asyncpg.connection.Connection
     _pool: asyncpg.Pool | None
     _connection: asyncpg.connection.Connection | None = None

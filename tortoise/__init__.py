@@ -30,10 +30,11 @@ from tortoise.log import logger
 from tortoise.models import Model, ModelMeta
 from tortoise.timezone import _reset_timezone_cache
 from tortoise.utils import generate_schema_for_client
+from tortoise.views import View, ViewMetaInfo
 
 
 class Tortoise:
-    apps: dict[str, dict[str, type[Model]]] = {}
+    apps: dict[str, dict[str, type[Model] | type[View]]] = {}
     table_name_generator: Callable[[type[Model]], str] | None = None
     _inited: bool = False
 
@@ -106,7 +107,7 @@ class Tortoise:
             models = []
             for app in cls.apps.values():
                 for model in app.values():
-                    models.append(model)
+                    models.append(model)  # type: ignore[arg-type]
 
         return {
             f"{model._meta.app}.{model.__name__}": model.describe(serializable) for model in models
@@ -122,7 +123,7 @@ class Tortoise:
             :raises ConfigurationError: If no such app exists.
             """
             try:
-                return cls.apps[related_app_name][related_model_name]
+                return cls.apps[related_app_name][related_model_name]  # type: ignore[return-value]
             except KeyError:
                 if related_app_name not in cls.apps:
                     raise ConfigurationError(
@@ -221,21 +222,25 @@ class Tortoise:
 
         for app_name, app in cls.apps.items():
             for model_name, model in app.items():
+                # Skip views - they don't have relationships
+                if type(model._meta).__name__ == "ViewMetaInfo":
+                    continue
+
                 if model._meta._inited:
                     continue
                 model._meta._inited = True
                 if not model._meta.db_table:
-                    model._meta.db_table = (
-                        cls.table_name_generator(model)
+                    model._meta.db_table = (  # type: ignore[misc]
+                        cls.table_name_generator(model)  # type: ignore[arg-type]
                         if cls.table_name_generator
                         else (model.__name__.lower())
                     )
 
                 for field in sorted(model._meta.fk_fields):
-                    init_fk_o2o_field(model, field)
+                    init_fk_o2o_field(model, field)  # type: ignore[arg-type]
 
                 for field in model._meta.o2o_fields:
-                    init_fk_o2o_field(model, field, is_o2o=True)
+                    init_fk_o2o_field(model, field, is_o2o=True)  # type: ignore[arg-type]
 
                 for field in list(model._meta.m2m_fields):
                     m2m_object = cast(ManyToManyFieldInstance, model._meta.fields_map[field])
@@ -269,7 +274,7 @@ class Tortoise:
                         )
                         m2m_object.through = f"{model._meta.db_table}_{related_model_table_name}"
 
-                    m2m_relation = ManyToManyFieldInstance(
+                    m2m_relation = ManyToManyFieldInstance(  # type: ignore[type-var]
                         f"{app_name}.{model_name}",
                         m2m_object.through,
                         forward_key=m2m_object.backward_key,
@@ -283,7 +288,9 @@ class Tortoise:
                     related_model._meta.add_field(backward_relation_name, m2m_relation)
 
     @classmethod
-    def _discover_models(cls, models_path: ModuleType | str, app_label: str) -> list[type[Model]]:
+    def _discover_models(
+        cls, models_path: ModuleType | str, app_label: str
+    ) -> list[type[Model] | type[View]]:
         if isinstance(models_path, ModuleType):
             module = models_path
         else:
@@ -291,7 +298,7 @@ class Tortoise:
                 module = importlib.import_module(models_path)
             except ImportError:
                 raise ConfigurationError(f'Module "{models_path}" not found')
-        discovered_models = []
+        discovered_models: list[type[Model] | type[View]] = []
         if possible_models := getattr(module, "__models__", None):
             try:
                 possible_models = [*possible_models]
@@ -300,8 +307,15 @@ class Tortoise:
         if not possible_models:
             possible_models = [getattr(module, attr_name) for attr_name in dir(module)]
         for attr in possible_models:
+            # Discover Models
             if isclass(attr) and issubclass(attr, Model) and not attr._meta.abstract:
                 if attr._meta.app and attr._meta.app != app_label:
+                    continue
+                attr._meta.app = app_label
+                discovered_models.append(attr)
+            # Discover Views
+            elif isclass(attr) and issubclass(attr, View) and attr is not View:
+                if hasattr(attr._meta, "app") and attr._meta.app and attr._meta.app != app_label:
                     continue
                 attr._meta.app = app_label
                 discovered_models.append(attr)
@@ -328,7 +342,7 @@ class Tortoise:
 
         :raises ConfigurationError: If models are invalid.
         """
-        app_models: list[type[Model]] = []
+        app_models: list[type[Model] | type[View]] = []
         for models_path in models_paths:
             app_models += cls._discover_models(models_path, app_label)
 
@@ -379,13 +393,27 @@ class Tortoise:
     def _build_initial_querysets(cls) -> None:
         for app in cls.apps.values():
             for model in app.values():
-                model._meta.finalise_model()
-                model._meta.basetable = Table(name=model._meta.db_table, schema=model._meta.schema)
-                basequery = model._meta.db.query_class.from_(model._meta.basetable)
-                model._meta.basequery = cast(Query, basequery)
-                model._meta.basequery_all_fields = cast(
-                    Query, basequery.select(*model._meta.db_fields)
-                )
+                # Check if this is a View or a Model
+                if type(model._meta).__name__ == "ViewMetaInfo":
+                    # Views need their base table/query set up for querying
+                    meta: ViewMetaInfo = model._meta  # type: ignore[assignment]
+                    meta.basetable = Table(name=meta.db_view, schema=meta.schema)
+                    # Build list of db field names for the view
+                    meta.db_fields = [field_name for field_name in meta.fields_map.keys()]
+                    basequery = meta.db.query_class.from_(meta.basetable)
+                    meta.basequery = cast(Query, basequery)
+                    meta.basequery_all_fields = cast(Query, basequery.select(*meta.db_fields))
+                else:
+                    # Regular Model
+                    model._meta.finalise_model()  # type: ignore[union-attr]
+                    model._meta.basetable = Table(
+                        name=model._meta.db_table, schema=model._meta.schema
+                    )
+                    basequery = model._meta.db.query_class.from_(model._meta.basetable)
+                    model._meta.basequery = cast(Query, basequery)
+                    model._meta.basequery_all_fields = cast(
+                        Query, basequery.select(*model._meta.db_fields)
+                    )
 
     @classmethod
     async def init(
@@ -648,6 +676,7 @@ __version__ = "0.25.1"
 
 __all__ = [
     "Model",
+    "View",
     "Tortoise",
     "BaseDBAsyncClient",
     "__version__",

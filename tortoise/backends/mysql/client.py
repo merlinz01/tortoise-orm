@@ -32,6 +32,7 @@ from tortoise.backends.base.client import (
 )
 from tortoise.backends.mysql.executor import MySQLExecutor
 from tortoise.backends.mysql.schema_generator import MySQLSchemaGenerator
+from tortoise.backends.mysql.view_generator import MySQLViewSchemaGenerator
 from tortoise.exceptions import (
     DBConnectionError,
     IntegrityError,
@@ -66,6 +67,7 @@ class MySQLClient(BaseDBAsyncClient):
     query_class = MySQLQuery
     executor_class = MySQLExecutor
     schema_generator = MySQLSchemaGenerator
+    view_generator = MySQLViewSchemaGenerator
     capabilities = Capabilities(
         "mysql",
         requires_limit=True,

@@ -19,6 +19,7 @@ import tortoise.backends.base.client as base_client
 import tortoise.backends.base_postgres.client as postgres_client
 import tortoise.backends.psycopg.executor as executor
 import tortoise.exceptions as exceptions
+from tortoise.backends.base_postgres.view_generator import PostgreSQLViewSchemaGenerator
 from tortoise.backends.psycopg.schema_generator import PsycopgSchemaGenerator
 
 FuncType = Callable[..., Any]
@@ -57,6 +58,7 @@ class PsycopgClient(postgres_client.BasePostgresClient):
     query_class: type[PsycopgSQLQuery] = PsycopgSQLQuery
     executor_class: type[executor.PsycopgExecutor] = executor.PsycopgExecutor
     schema_generator: type[PsycopgSchemaGenerator] = PsycopgSchemaGenerator
+    view_generator: type[PostgreSQLViewSchemaGenerator] = PostgreSQLViewSchemaGenerator
     _pool: AsyncConnectionPool | None = None
     _connection: psycopg.AsyncConnection
     default_timeout: float = 30
